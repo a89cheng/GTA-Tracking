@@ -1,4 +1,4 @@
-DataBase Schema Raw and Cleaned
+--DataBase Schema Raw and Cleaned
 
 --Must be made prior to the table
 CREATE TYPE gtfs_schedule_relationships AS ENUM (
