@@ -2,9 +2,9 @@
 
 --Must be made prior to the table
 CREATE TYPE gtfs_schedule_relationships AS ENUM (
-    'SCHEDULED', 'CANCELED', 'ADDED', 
-    'UNSCHEDULED', 'DUPLICATED', 'NEW', 
-    'SKIPPED', 'NO_DATA'
+    "SCHEDULED", "ADDED", "UNSCHEDULED",
+    "CANCELED", "REPLACEMENT", "DUPLICATED",
+    "NEW", "DELETED",
 );
 
 CREATE TYPE transport AS ENUM (
