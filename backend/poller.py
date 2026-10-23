@@ -41,17 +41,17 @@ logger = logging.getLogger(__name__)
 
 
 class Poller:
-    def __init__(self, agency:agency, request_link:str, info_type:str) -> None:
+    def __init__(self, agency:agency, request_link:str, info_type:str, session: aiohttp.ClientSession) -> None:
         self.agency = agency
         self.request_link = request_link
         self.information_type = info_type
         self.feed: gtfs_realtime_pb2.FeedMessage = gtfs_realtime_pb2.FeedMessage()
         self.timeout = aiohttp.ClientTimeout(total=14.0)
-
+        self.session = session
 
     async def fetch_data(self):
         # Make the 
-        async with aiohttp.ClientSession() as session:
+        async with self.session  as session:
         # Make the asynchronous GET request to the specified link
             try:
                 async with session.get(self.request_link, timeout=self.timeout) as response:
@@ -138,13 +138,13 @@ async def insert_rows(db_manager: DatabaseManager, table:str, columns:list[str],
     await db_manager._write_to_database(query, data)
 
 class RawDataManager:
-    def __init__(self, database_manager):
+    def __init__(self, database_manager, session: aiohttp.ClientSession):
         self.database_manager = database_manager
 
         # self.go_trip_poller = Poller(agency.GO, "TBD", information_type.TRIP_UPDATE)
-        self.ttc_trip_poller = Poller(agency.TTC, "https://bustime.ttc.ca/gtfsrt/trips?", information_type.TRIP_UPDATE)
+        self.ttc_trip_poller = Poller(agency.TTC, "https://bustime.ttc.ca/gtfsrt/trips?", information_type.TRIP_UPDATE, session)
         # self.go_vehicle_poller = Poller(agency.GO, "TBD", information_type.VEHICLE_UPDATE)
-        self.ttc_vehicle_poller = Poller(agency.TTC, "https://bustime.ttc.ca/gtfsrt/vehicles?", information_type.VEHICLE_UPDATE)
+        self.ttc_vehicle_poller = Poller(agency.TTC, "https://bustime.ttc.ca/gtfsrt/vehicles?", information_type.VEHICLE_UPDATE, session)
 
         self.pollers = [
             # self.go_trip_poller, self.go_vehicle_poller, 
@@ -224,28 +224,29 @@ async def start_poller():
     loop = asyncio.get_running_loop()
     interval = 15.0  # Target interval in seconds
 
-    # Instantiate the only ever db manager
-    database_manager = DatabaseManager()
-    raw_data_manager = RawDataManager(database_manager)
+    async with aiohttp.ClientSession() as session:
+   	    # Instantiate the only ever db manager
+        database_manager = DatabaseManager()
+        raw_data_manager = RawDataManager(database_manager, session)
 
-    logging.info("Scheduler started. Target interval: {interval} seconds.")
+        logging.info("Scheduler started. Target interval: {interval} seconds.")
 
-    while True:
-        # Record the exact internal loop time before the task runs
-        start_time = loop.time()
-        
-        # Run the cycle one time! 
-        await raw_data_manager.run_cycle()
-        
-        # Calculate how long the task actually took to execute
-        execution_time = loop.time() - start_time
-        
-        # Dynamically calculate the remaining sleep time needed to hit the 15s mark
-        sleep_time = max(0.0, interval - execution_time)
-        
-        logging.info(f"--> Job took {execution_time:.2f}s. Sleeping for {sleep_time:.2f}s...\n")
+        while True:
+            # Record the exact internal loop time before the task runs
+            start_time = loop.time()
 
-        # Sleep for the remaining time
-        await asyncio.sleep(sleep_time)
+            # Run the cycle one time! 
+            await raw_data_manager.run_cycle()
+        
+            # Calculate how long the task actually took to execute
+            execution_time = loop.time() - start_time
+        
+            # Dynamically calculate the remaining sleep time needed to hit the 15s mark
+            sleep_time = max(0.0, interval - execution_time)
+        
+            logging.info(f"--> Job took {execution_time:.2f}s. Sleeping for {sleep_time:.2f}s...\n")
+
+            # Sleep for the remaining time
+            await asyncio.sleep(sleep_time)
 
 asyncio.run(start_poller())
