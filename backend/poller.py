@@ -50,53 +50,53 @@ class Poller:
         self.session = session
 
     async def fetch_data(self):
-        # Make the 
-        async with self.session  as session:
-        # Make the asynchronous GET request to the specified link
-            try:
-                async with session.get(self.request_link, timeout=self.timeout) as response:
-                    # Raise for the status of the request immediately 
-                    response.raise_for_status()
+        # Session comes directly from the mainloop since the with block in the start_poller method 
+        # creates a session with an auto-cleanup with block
 
-                    logger.info(
-                        "Feed fetched successfully: agency=%s information_type=%s status=%s",
-                        self.agency.name,
-                        self.information_type.name,
-                        response.status,
-                    )
-                    
-                    # Await the text or JSON content
-                    self.raw_data = await response.read()
-                    self._decode_information()
-                    
-            except aiohttp.ClientResponseError as error:
-                # You access the numeric code using error.status (not error.response.status_code)
-                logger.error(
-                    "HTTP request failed: agency=%s type=%s status=%s",
+        try:
+            async with self.session.get(self.request_link, timeout=self.timeout) as response:
+                # Raise for the status of the request immediately 
+                response.raise_for_status()
+
+                logger.info(
+                    "Feed fetched successfully: agency=%s information_type=%s status=%s",
                     self.agency.name,
                     self.information_type.name,
-                    error.status,
-                    exc_info=True,
+                    response.status,
                 )
-                raise
-            except aiohttp.ClientError as error:
-                # Captures other generic network/connection issues
-                logger.error(
-                    "Network error: agency=%s type=%s",
-                    self.agency.name,
-                    self.information_type.name,
-                    exc_info=True,
-                )
-                raise
-            except asyncio.TimeoutError as error:
-                # Catches an aiohttp timeout error
-                logger.error(
-                    "Connected timed out: agency=%s type=%s",
-                    self.agency.name,
-                    self.information_type.name,
-                    exc_info=True,
-                )
-                raise
+                
+                # Await the text or JSON content
+                self.raw_data = await response.read()
+                self._decode_information()
+                
+        except aiohttp.ClientResponseError as error:
+            # You access the numeric code using error.status (not error.response.status_code)
+            logger.error(
+                "HTTP request failed: agency=%s type=%s status=%s",
+                self.agency.name,
+                self.information_type.name,
+                error.status,
+                exc_info=True,
+            )
+            raise
+        except aiohttp.ClientError as error:
+            # Captures other generic network/connection issues
+            logger.error(
+                "Network error: agency=%s type=%s",
+                self.agency.name,
+                self.information_type.name,
+                exc_info=True,
+            )
+            raise
+        except asyncio.TimeoutError as error:
+            # Catches an aiohttp timeout error
+            logger.error(
+                "Connected timed out: agency=%s type=%s",
+                self.agency.name,
+                self.information_type.name,
+                exc_info=True,
+            )
+            raise
 
     def _decode_information(self):
         if not self.raw_data:
