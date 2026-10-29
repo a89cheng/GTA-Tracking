@@ -49,6 +49,9 @@ class Poller:
         self.timeout = aiohttp.ClientTimeout(total=14.0)
         self.session = session
 
+        # Should be updated every time, and is for insertion de-duping
+        self.most_recent_time = 0
+
     async def fetch_data(self):
         # Session comes directly from the mainloop since the with block in the start_poller method 
         # creates a session with an auto-cleanup with block
@@ -165,7 +168,7 @@ class RawDataManager:
             logger.info(
                 "Beginning trip extraction"
             )
-            rows = trip_extraction(poller.agency, poller.feed)
+            rows = trip_extraction(poller.agency, poller.feed, poller.most_recent_time)
 
         else:
             table = "RAW_vehicle_positions"
@@ -175,10 +178,21 @@ class RawDataManager:
                 "current_stop_sequence", "current_status", "stop_id", "position"
                 
             ]
-            rows = vehicle_extraction(poller.agency, poller.feed)
+            rows = vehicle_extraction(poller.agency, poller.feed, poller.most_recent_time)
 
-        # Insert data accordingly 
-        await insert_rows(self.database_manager, table, columns, rows, ["position", "stop_updates"])
+        # Insert data accordingly, if there is new data 
+        if rows:
+            new_time = poller.feed.header.timestamp
+            poller.most_recent_time = new_time
+            await insert_rows(self.database_manager, table, columns, rows, ["position", "stop_updates"])
+        else:
+            logger.info(
+                "Insertion skipped: agency=%s table=%s feed_timestamp=%s most_recent_time=%s",
+                poller.agency.name,
+                table,
+                poller.feed.header.timestamp,
+                poller.most_recent_time,
+            )
 
         # This should only run if there are no exceptions, preserves any unwritten feed information
         poller.clear_feed()
@@ -229,7 +243,7 @@ async def start_poller():
         database_manager = DatabaseManager()
         raw_data_manager = RawDataManager(database_manager, session)
 
-        logging.info("Scheduler started. Target interval: {interval} seconds.")
+        logging.info(f"Scheduler started. Target interval: {interval} seconds.")
 
         while True:
             # Record the exact internal loop time before the task runs

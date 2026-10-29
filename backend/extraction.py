@@ -4,8 +4,13 @@ import json
 
 logger = logging.getLogger(__name__)
 
-def trip_extraction(agency, feed) -> list[tuple]:
+def trip_extraction(agency, feed, m_recent_time:int) -> list[tuple] | list[None]:
     all_trip_rows = [] 
+
+    # Need to know timestamp earlier
+    instance_timestamp = feed.header.timestamp
+    if not(instance_timestamp > m_recent_time):
+            return list()
 
     # Each feed contains one header and many entities
     for entity in feed.entity:
@@ -15,7 +20,6 @@ def trip_extraction(agency, feed) -> list[tuple]:
 
         # Extract the following information
         trip_entity_id = entity.id
-        instance_timestamp = feed.header.timestamp
         data_update_timestamp = entity.trip_update.timestamp
         trip_id = entity.trip_update.trip.trip_id
         route_id = entity.trip_update.trip.route_id
@@ -109,9 +113,13 @@ def trip_extraction(agency, feed) -> list[tuple]:
     return all_trip_rows
 
 
-def vehicle_extraction(agency, feed) -> list[tuple]:
+def vehicle_extraction(agency, feed, m_recent_time:int) -> list[tuple]:
     all_vehicle_rows = []
 
+    instance_timestamp = feed.header.timestamp
+    if not(instance_timestamp > m_recent_time):
+            return list()
+    
     for entity in feed.entity:
 
         if not entity.HasField("vehicle"):
@@ -124,7 +132,7 @@ def vehicle_extraction(agency, feed) -> list[tuple]:
             if vehicle.HasField("vehicle") and vehicle.vehicle.HasField("id")
             else None
         )
-        instance_timestamp = feed.header.timestamp
+
         data_update_timestamp = (
             vehicle.timestamp
             if vehicle.HasField("timestamp")
